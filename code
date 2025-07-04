@@ -1,0 +1,149 @@
+const int floorButtons[5] = {2, 3, 4, 5, 6};       // External call buttons
+const int internalButtons[5] = {7, 8, 9, 10, 11};  // Internal lift buttons
+
+// Motor control pins
+const int lift1Pin1 = A0;
+const int lift1Pin2 = A1;
+const int lift2Pin1 = A2;
+const int lift2Pin2 = A3;
+
+// LED Pins
+const int ledLift1 = 12;
+const int ledLift2 = 13;
+
+int lift1Position = 1;
+int lift2Position = 1;
+
+int activeLift = 1;
+
+unsigned long ledLift1Timer = 0;
+unsigned long ledLift2Timer = 0;
+const unsigned long ledDuration = 2000;  // 20 seconds
+
+void setup() {
+  Serial.begin(9600);
+  
+  for (int i = 0; i < 5; i++) {
+    pinMode(floorButtons[i], INPUT);
+    pinMode(internalButtons[i], INPUT);
+  }
+
+  pinMode(lift1Pin1, OUTPUT);
+  pinMode(lift1Pin2, OUTPUT);
+  pinMode(lift2Pin1, OUTPUT);
+  pinMode(lift2Pin2, OUTPUT);
+
+  pinMode(ledLift1, OUTPUT);
+  pinMode(ledLift2, OUTPUT);
+}
+
+void loop() {
+  // ext. check
+  for (int i = 0; i < 5; i++) {
+    if (digitalRead(floorButtons[i]) == HIGH) {
+      int floor = i + 1;
+      Serial.print("External Button Pressed: Floor ");
+      Serial.println(floor);
+      moveClosestLiftToFloor(floor);
+      delay(1000);
+    }
+  }
+
+  // int. check
+  for (int i = 0; i < 5; i++) {
+    if (digitalRead(internalButtons[i]) == HIGH) {
+      int floor = i + 1;
+      Serial.print("Internal Button Pressed: Floor ");
+      Serial.println(floor);
+      moveActiveLiftToFloor(floor);
+      delay(1000);
+    }
+  }
+
+  // Handle LED Timers
+  unsigned long currentTime = millis();
+  
+  if (currentTime > ledLift1Timer) {
+    digitalWrite(ledLift1, LOW);
+  }
+  if (currentTime > ledLift2Timer) {
+    digitalWrite(ledLift2, LOW);
+  }
+}
+
+void moveClosestLiftToFloor(int floor) {
+  if (lift1Position == floor) {
+    Serial.println("Lift 1 already here");
+    activeLift = 1;
+    resetLedTimer(1);
+    return;
+  }
+  if (lift2Position == floor) {
+    Serial.println("Lift 2 already here");
+    activeLift = 2;
+    resetLedTimer(2);
+    return;
+  }
+
+  int dist1 = abs(floor - lift1Position);
+  int dist2 = abs(floor - lift2Position);
+
+  if (dist1 <= dist2) {
+    moveLift(1, floor);
+  } else {
+    moveLift(2, floor);
+  }
+}
+
+void moveActiveLiftToFloor(int floor) {
+  moveLift(activeLift, floor);
+}
+
+void moveLift(int liftNum, int targetFloor) {
+  int *liftPos = (liftNum == 1) ? &lift1Position : &lift2Position;
+  int steps = abs(targetFloor - *liftPos);
+  if (steps == 0) return;
+
+  if (liftNum == 1) {
+    digitalWrite(lift1Pin1, targetFloor > *liftPos ? LOW : HIGH);
+    digitalWrite(lift1Pin2, targetFloor < *liftPos ? LOW : HIGH);
+    Serial.println("Direction check for 1");
+  } else {
+    digitalWrite(lift2Pin1, targetFloor > *liftPos ? HIGH : LOW);
+    digitalWrite(lift2Pin2, targetFloor < *liftPos ? HIGH : LOW);
+    Serial.println("Direction check for 2");
+  }
+
+  delay(steps * 1000);
+
+  // Stop motor
+  if (liftNum == 1) {
+    digitalWrite(lift1Pin1, LOW);
+    digitalWrite(lift1Pin2, LOW);
+  } else {
+    digitalWrite(lift2Pin1, LOW);
+    digitalWrite(lift2Pin2, LOW);
+  }
+
+  *liftPos = targetFloor;
+  activeLift = liftNum;
+
+  resetLedTimer(liftNum);  // LED timer update
+
+  Serial.print("Lift ");
+  Serial.print(liftNum);
+  Serial.print(" reached Floor ");
+  Serial.println(targetFloor);
+}
+
+void resetLedTimer(int liftNum) {
+  unsigned long currentTime = millis();
+
+  if (liftNum == 1) {
+    digitalWrite(ledLift1, HIGH);
+    ledLift1Timer = currentTime + ledDuration;
+  } else {
+    digitalWrite(ledLift2, HIGH);
+    ledLift2Timer = currentTime + ledDuration;
+  }
+}
